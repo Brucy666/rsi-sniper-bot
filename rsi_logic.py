@@ -1,34 +1,58 @@
 # rsi_logic.py
 
 import pandas as pd
+import numpy as np
+from bybit_feed import get_bybit_ohlcv
 
-def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+def calculate_rsi(series, period=14):
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
+    avg_gain = pd.Series(gain).rolling(window=period).mean()
+    avg_loss = pd.Series(loss).rolling(window=period).mean()
+    
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-def scan_rsi_sniper_map(df: pd.DataFrame, symbol="BTCUSDT", tf="15m") -> dict:
-    close = df["close"]
+def detect_rsi_sniper(df):
+    # Calculate RSI
+    df['rsi'] = calculate_rsi(df['close'])
 
-    if close.empty or len(close) < 20:
-        print("[RSI LOGIC] ⚠️ Not enough data for RSI.")
-        return {"signal": False}
+    latest = df.iloc[-1]
+    prev = df.iloc[-2]
 
-    rsi = calculate_rsi(close)
+    rsi_now = latest['rsi']
+    rsi_prev = prev['rsi']
+    close_now = latest['close']
+    close_prev = prev['close']
 
-    latest_rsi = rsi.iloc[-1]
-    previous_rsi = rsi.iloc[-2]
+    # Placeholder signal logic (you can make this smarter)
+    if rsi_now < 30 and close_now > close_prev:
+        return "Bullish RSI Reversal"
+    elif rsi_now > 70 and close_now < close_prev:
+        return "Bearish RSI Rejection"
+    else:
+        return None
 
-    if latest_rsi < 30 and previous_rsi > latest_rsi:
+def scan_rsi_sniper_map(symbol="BTCUSDT", interval="15"):
+    df = get_bybit_ohlcv(symbol=symbol, interval=interval)
+
+    if df is None or df.empty:
         return {
-            "signal": True,
-            "setup": "RSI Oversold Bounce",
-            "rsi": round(latest_rsi, 2),
             "symbol": symbol,
-            "timeframe": tf,
-            "price": float(df["close"].iloc[-1]),
+            "interval": interval,
+            "signal": None,
+            "setup": "No data",
+            "rsi_value": None
         }
 
-    return {"signal": False}
+    signal = detect_rsi_sniper(df)
+
+    return {
+        "symbol": symbol,
+        "interval": interval,
+        "signal": bool(signal),
+        "setup": signal if signal else "No Signal",
+        "rsi_value": df['rsi'].iloc[-1] if "rsi" in df else None
+    }
