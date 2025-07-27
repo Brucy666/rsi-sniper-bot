@@ -1,27 +1,38 @@
+# bybit_feed.py
+
 import requests
 import pandas as pd
+import time
 
-def get_ohlcv_data(symbol: str, interval: str) -> pd.DataFrame:
-    url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval={interval}&limit=200"
+def get_bybit_ohlcv(symbol="BTCUSDT", interval="15", limit=200):
     try:
-        res = requests.get(url).json()
-        rows = res.get("result", {}).get("list", [])
-        if not rows:
-            return pd.DataFrame()
+        resolution = interval
+        endpoint = f"https://api.bybit.com/v5/market/kline"
+        params = {
+            "category": "linear",
+            "symbol": symbol,
+            "interval": resolution,
+            "limit": limit
+        }
 
-        df = pd.DataFrame(rows, columns=[
-            "timestamp", "open", "high", "low", "close", "volume", "turnover"
+        response = requests.get(endpoint, params=params)
+        data = response.json()
+
+        if "result" not in data or "list" not in data["result"]:
+            print("[BYBIT_FEED] ❌ Invalid response format")
+            return None
+
+        ohlcv_raw = data["result"]["list"]
+        ohlcv_raw.reverse()  # newest last
+
+        df = pd.DataFrame(ohlcv_raw, columns=[
+            "timestamp", "open", "high", "low", "close", "volume", "_turnover"
         ])
-        df = df.astype(float)
-        df["rsi"] = df["close"].rolling(14).apply(compute_rsi, raw=False)
-        return df
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch data: {e}")
-        return pd.DataFrame()
 
-def compute_rsi(series):
-    delta = series.diff()
-    gain = delta.where(delta > 0, 0.0).rolling(14).mean()
-    loss = -delta.where(delta < 0, 0.0).rolling(14).mean()
-    rs = gain / (loss + 1e-10)
-    return 100 - (100 / (1 + rs))
+        df["timestamp"] = pd.to_datetime(df["timestamp"].astype(float), unit="ms")
+        df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
+        return df
+
+    except Exception as e:
+        print(f"[BYBIT_FEED] ⚠️ Error fetching OHLCV: {e}")
+        return None
