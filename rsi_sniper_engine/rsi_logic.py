@@ -2,7 +2,7 @@
 
 import pandas as pd
 from bybit_feed import get_bybit_ohlcv
-from .rsi_utils import calculate_rsi, detect_rsi_signal
+from rsi_sniper_engine.rsi_utils import calculate_rsi, detect_rsi_signal
 
 def scan_rsi_sniper_map(symbol="BTCUSDT"):
     timeframes = [
