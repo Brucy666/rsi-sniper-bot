@@ -1,16 +1,23 @@
-# rsi_utils.py (RSI Signal Detection Utilities)
+# rsi_utils.py (Fixed version for RSI Sniper Bot)
 
 import pandas as pd
 
-def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
+def calculate_rsi(df_or_series, period: int = 14) -> pd.Series:
     """
-    Calculate the RSI from closing prices in a DataFrame.
-    Returns a Series of RSI values.
+    Accepts a DataFrame or Series and calculates RSI.
     """
-    if "close" not in df.columns or df["close"].isnull().all():
+
+    # Normalize input to Series of close prices
+    if isinstance(df_or_series, pd.DataFrame):
+        if "close" not in df_or_series.columns:
+            return pd.Series(dtype=float)
+        close = df_or_series["close"]
+    elif isinstance(df_or_series, pd.Series):
+        close = df_or_series
+    else:
         return pd.Series(dtype=float)
 
-    delta = df["close"].diff()
+    delta = close.diff()
     gain = delta.where(delta > 0, 0.0)
     loss = -delta.where(delta < 0, 0.0)
 
@@ -25,14 +32,12 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
 
 def detect_rsi_signal(rsi_series: pd.Series) -> dict or None:
     """
-    Analyze RSI Series and return a sniper signal if pattern is detected.
-    Example setup: RSI V-Bounce from oversold territory.
+    Detect RSI sniper signal (e.g. V-Bounce from oversold).
     """
     if rsi_series is None or rsi_series.empty:
         return None
 
     rsi_series = rsi_series.dropna()
-
     if len(rsi_series) < 3:
         return None
 
@@ -40,7 +45,7 @@ def detect_rsi_signal(rsi_series: pd.Series) -> dict or None:
     previous = rsi_series.iloc[-2]
     before_previous = rsi_series.iloc[-3]
 
-    # Example sniper logic: oversold V bounce
+    # V-bounce pattern
     if before_previous > previous < 30 and latest > previous:
         return {
             "setup": "RSI V-Bounce",
