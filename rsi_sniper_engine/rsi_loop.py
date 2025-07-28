@@ -13,7 +13,7 @@ def run_rsi_sniper():
 
         tf_map, signal_summary = scan_rsi_sniper_map(symbol="BTCUSDT")
 
-        if signal_summary.get("signal"):
+        if isinstance(signal_summary, dict) and signal_summary.get("signal"):
             print(f"[RSI SNIPER] ✅ Signal on {signal_summary['timeframe']} - {signal_summary['setup']}")
             signal_summary["tf_map"] = tf_map
             send_rsi_discord_alert(signal_summary)
